@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+export const maxDuration = 60
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -14,7 +16,7 @@ export async function POST(req: NextRequest) {
       .from('rendimiento_base_datos')
       .select('*')
       .eq('posicion', posicion)
-      .limit(300)
+      .limit(100)
 
     if (minutosMin && minutosMin > 0) query = (query as any).gte('minutos', minutosMin)
     if (liga)      query = (query as any).eq('liga', liga)
