@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -11,6 +11,15 @@ const supabase = createClient(
 const POSICIONES = ['DFC', 'ARQ', 'LAT DER', 'LAT IZQ', 'MED', 'MED MIX', 'MED OF', 'EXTR', 'DEL']
 const LIGAS = ['Argentina 1A', 'Brasil A', 'Uruguay 1A', 'Colombia 1A', 'Chile 1A', 'Paraguay 1A', 'Venezuela 1A', 'Ecuador 1A', 'México 1A', 'USA MLS', 'España A', 'Italia A', 'Alemania A', 'Francia A', 'Inglaterra A', 'Copa Libertadores', 'Copa Sudamericana']
 const TEMPORADAS = ['2026', '2025', '2024']
+
+const MINUTOS_OPCIONES = [
+  { label: 'Sin mínimo',  value: 1    },
+  { label: '180 min',     value: 180  },
+  { label: '450 min',     value: 450  },
+  { label: '900 min',     value: 900  },
+  { label: '1350 min',    value: 1350 },
+  { label: '1800 min',    value: 1800 },
+]
 
 const METRICAS_POR_POS: Record<string, {key: string, label: string}[]> = {
   DFC: [
@@ -128,19 +137,6 @@ type Jugador = {
   percentiles: Record<string, number>
 }
 
-function getCalColor(score: number, max: number) {
-  const pct = score / max
-  if (pct >= 0.67) return { bg: 'bg-green-100', text: 'text-green-800', bar: 'bg-green-500' }
-  if (pct >= 0.33) return { bg: 'bg-yellow-100', text: 'text-yellow-800', bar: 'bg-yellow-500' }
-  return { bg: 'bg-red-100', text: 'text-red-800', bar: 'bg-red-500' }
-}
-
-function getPctColor(pct: number) {
-  if (pct >= 0.67) return 'bg-green-500'
-  if (pct >= 0.33) return 'bg-yellow-500'
-  return 'bg-red-500'
-}
-
 function formatReporte(texto: string) {
   if (!texto) return []
   return texto.split('\n').filter(l => l.trim()).map((line, i) => {
@@ -148,10 +144,7 @@ function formatReporte(texto: string) {
     if (trimmed.startsWith('**') && trimmed.endsWith('**')) {
       return <div key={i} className="font-semibold text-gray-900 mt-3 mb-1 text-sm">{trimmed.replace(/\*\*/g, '')}</div>
     }
-    if (trimmed.startsWith('* ')) {
-      return <div key={i} className="text-sm text-gray-700 pl-3 py-0.5">• {trimmed.substring(2)}</div>
-    }
-    if (trimmed.startsWith('- ')) {
+    if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
       return <div key={i} className="text-sm text-gray-700 pl-3 py-0.5">• {trimmed.substring(2)}</div>
     }
     return <p key={i} className="text-sm text-gray-700 leading-relaxed py-0.5">{trimmed}</p>
@@ -171,20 +164,11 @@ export default function RendimientoPage() {
   const [reporte, setReporte] = useState<string | null>(null)
   const [loadingReporte, setLoadingReporte] = useState(false)
   const [referencia, setReferencia] = useState<Jugador | null>(null)
-  const [busquedaSim, setBusquedaSim] = useState('')
-  const [resultadosSim, setResultadosSim] = useState<Jugador[]>([])
-  const [buscandoSim, setBuscandoSim] = useState(false)
   const [metricaComp, setMetricaComp] = useState('')
 
-  // Cargar jugadores de la liga seleccionada
   useEffect(() => { fetchJugadores() }, [posicion, liga, temporada])
-
-  // Cargar referencia River Argentina (siempre fija)
   useEffect(() => { fetchReferenciaRiver() }, [posicion, temporada])
-
-  // Cargar reporte cuando cambia el jugador seleccionado
   useEffect(() => { if (jugadorSel) fetchReporte(jugadorSel) }, [jugadorSel])
-
   useEffect(() => {
     if (METRICAS_POR_POS[posicion]?.length) setMetricaComp(METRICAS_POR_POS[posicion][0].key)
   }, [posicion])
@@ -205,7 +189,6 @@ export default function RendimientoPage() {
   }
 
   async function fetchReferenciaRiver() {
-    // Busca el mejor de River en Argentina 1A — primero en la temporada actual, si no en la anterior
     let { data } = await supabase
       .from('rendimiento_indice_datos')
       .select('*')
@@ -215,8 +198,6 @@ export default function RendimientoPage() {
       .ilike('equipo', '%River%')
       .order('indice_total', { ascending: false })
       .limit(1)
-
-    // Fallback: si no hay en la temporada seleccionada, buscar en cualquier temporada
     if (!data?.length) {
       const res = await supabase
         .from('rendimiento_indice_datos')
@@ -234,8 +215,6 @@ export default function RendimientoPage() {
   async function fetchReporte(j: Jugador) {
     setReporte(null)
     setLoadingReporte(true)
-
-    // 1. Buscar reporte existente en Supabase
     const { data } = await supabase
       .from('reportes_ia')
       .select('reporte')
@@ -243,14 +222,11 @@ export default function RendimientoPage() {
       .eq('posicion', j.posicion)
       .eq('temporada', j.temporada)
       .limit(1)
-
     if (data?.[0]?.reporte) {
       setReporte(data[0].reporte)
       setLoadingReporte(false)
       return
     }
-
-    // 2. Si no existe, generar con la ruta API interna
     try {
       const res = await fetch('/api/generar-reporte', {
         method: 'POST',
@@ -259,8 +235,6 @@ export default function RendimientoPage() {
       })
       const respData = await res.json()
       const textoGenerado = respData.reporte || 'No se pudo generar el reporte.'
-
-      // Guardar en Supabase para la próxima vez
       await supabase.from('reportes_ia').insert({
         nombre: j.nombre_completo,
         club: j.equipo,
@@ -270,7 +244,6 @@ export default function RendimientoPage() {
         temporada: j.temporada,
         reporte: textoGenerado,
       })
-
       setReporte(textoGenerado)
     } catch {
       setReporte('No se pudo generar el reporte en este momento.')
@@ -278,23 +251,8 @@ export default function RendimientoPage() {
     setLoadingReporte(false)
   }
 
-  async function buscarSimilitud() {
-    if (!busquedaSim.trim()) return
-    setBuscandoSim(true)
-    const { data } = await supabase
-      .from('rendimiento_indice_datos')
-      .select('*')
-      .ilike('nombre_completo', `%${busquedaSim}%`)
-      .eq('posicion', posicion)
-      .order('indice_total', { ascending: false })
-      .limit(15)
-    setResultadosSim(data || [])
-    setBuscandoSim(false)
-  }
-
   const maxScore = jugadores.length ? jugadores[0].indice_total : 10
   const metricas = METRICAS_POR_POS[posicion] || []
-  const metricaSelObj = metricas.find(m => m.key === metricaComp) || metricas[0]
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -311,7 +269,7 @@ export default function RendimientoPage() {
 
       <div className="max-w-6xl mx-auto px-6 py-6">
 
-        {/* Filtros */}
+        {/* Filtros globales */}
         <div className="flex gap-3 mb-5 flex-wrap items-center">
           <select value={posicion} onChange={e => setPosicion(e.target.value)} className={inputCls}>
             {POSICIONES.map(p => <option key={p}>{p}</option>)}
@@ -325,7 +283,7 @@ export default function RendimientoPage() {
           <span className="text-sm text-gray-500 ml-auto">{loading ? 'Cargando...' : `${jugadores.length} jugadores`}</span>
         </div>
 
-        {/* Referencia River — siempre fija de Argentina */}
+        {/* Referencia River */}
         {referencia && (
           <div className="bg-white border border-red-200 rounded-xl p-4 mb-5 flex items-center gap-4 flex-wrap">
             <div className="bg-[#C8102E] rounded-lg px-3 py-1 text-xs font-bold text-white uppercase tracking-wider flex-shrink-0">
@@ -348,8 +306,7 @@ export default function RendimientoPage() {
                 <div className="text-2xl font-bold" style={{color:'#15803d'}}>{referencia.score_ofensivo?.toFixed(2)}</div>
                 <div className="text-xs font-semibold" style={{color:'#374151'}}>Ofensivo</div>
               </div>
-              <button
-                onClick={() => { setJugadorSel(referencia); setTab(1) }}
+              <button onClick={() => { setJugadorSel(referencia); setTab(1) }}
                 className="text-xs border px-3 py-1.5 rounded-lg transition-colors font-medium"
                 style={{color:'#C8102E', borderColor:'#fca5a5'}}>
                 Ver detalle →
@@ -360,7 +317,7 @@ export default function RendimientoPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 mb-5">
-          {['Índice comparativo', 'Detalle del jugador', 'Comparativo posición', 'Buscador'].map((t, i) => (
+          {['Índice comparativo', 'Detalle del jugador', 'Comparativo posición', 'Similitud'].map((t, i) => (
             <button key={t} onClick={() => setTab(i)}
               className={`flex-1 py-2 text-xs font-medium rounded-lg transition-colors ${tab === i ? 'bg-[#C8102E] text-white' : 'text-gray-500 hover:text-gray-700'}`}>
               {t}
@@ -387,7 +344,6 @@ export default function RendimientoPage() {
               const total = jugadores.length
               const tercio = Math.ceil(total / 3)
               return jugadores.map((j, idx) => {
-                // Semáforo por terciles: top 33% verde, medio 33% amarillo, bottom 33% rojo
                 const esVerde = idx < tercio
                 const esAmarillo = idx >= tercio && idx < tercio * 2
                 const bgColor = esVerde ? '#f0fdf4' : esAmarillo ? '#fefce8' : '#fff1f2'
@@ -408,8 +364,7 @@ export default function RendimientoPage() {
                     <span className="w-36 text-xs text-gray-500 truncate">{j.equipo}</span>
                     <span className="w-16 text-center text-xs text-gray-600">{j.partidos}</span>
                     <span className="w-24 text-center">
-                      <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                        style={{background: badgeBg, color: badgeColor}}>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{background: badgeBg, color: badgeColor}}>
                         {j.indice_total?.toFixed(2)}
                       </span>
                     </span>
@@ -437,7 +392,6 @@ export default function RendimientoPage() {
 
             {jugadorSel && (
               <div className="space-y-4">
-                {/* Info + percentiles */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white border border-gray-200 rounded-xl p-5">
                     <div className="font-semibold text-gray-900 text-lg mb-0.5">{jugadorSel.nombre_completo}</div>
@@ -496,7 +450,6 @@ export default function RendimientoPage() {
                   </div>
                 </div>
 
-                {/* Fortalezas y debilidades */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white border border-gray-200 rounded-xl p-5">
                     <div className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2" style={{color:'#15803d'}}>
@@ -540,14 +493,12 @@ export default function RendimientoPage() {
                   </div>
                 </div>
 
-                {/* Reporte IA */}
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Análisis IA</div>
                     {loadingReporte && <div className="text-xs text-gray-400 italic">Generando reporte...</div>}
                     {reporte && !loadingReporte && (
-                      <button
-                        onClick={() => fetchReporte(jugadorSel)}
+                      <button onClick={() => fetchReporte(jugadorSel)}
                         className="ml-auto text-xs text-gray-400 hover:text-gray-600 border border-gray-200 px-2 py-0.5 rounded">
                         🔄 Regenerar
                       </button>
@@ -558,9 +509,7 @@ export default function RendimientoPage() {
                       Buscando reporte en base de datos o generando con IA...
                     </div>
                   ) : reporte ? (
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      {formatReporte(reporte)}
-                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">{formatReporte(reporte)}</div>
                   ) : (
                     <div className="text-gray-400 text-sm">No hay reporte disponible.</div>
                   )}
@@ -572,87 +521,376 @@ export default function RendimientoPage() {
 
         {/* TAB 3 — Comparativo posición */}
         {tab === 2 && (
-          <div>
-            <div className="flex gap-3 mb-5 items-center">
-              <label className="text-sm text-gray-500">Métrica:</label>
-              <select value={metricaComp} onChange={e => setMetricaComp(e.target.value)} className={inputCls}>
-                {metricas.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
-              </select>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <div className="text-sm font-medium text-gray-700 mb-4">
-                Top {Math.min(jugadores.length, 20)} — {metricaSelObj?.label} · {posicion} · {liga} {temporada}
-              </div>
-              <div className="space-y-2">
-                {jugadores.slice(0, 20).map((j, idx) => {
-                  const pct = j.percentiles?.[metricaComp]
-                  const pctNum = pct !== null && pct !== undefined ? Math.round(pct * 100) : 0
-                  const isRiver = j.equipo?.toLowerCase().includes('river')
-                  return (
-                    <div key={j.id} className="flex items-center gap-3">
-                      <span className="text-xs text-gray-400 w-5 text-right">{idx + 1}</span>
-                      <span className={`text-xs w-44 truncate font-medium ${isRiver ? 'text-[#C8102E]' : 'text-gray-800'}`}>{j.nombre_completo}</span>
-                      <span className="text-xs text-gray-400 w-28 truncate">{j.equipo}</span>
-                      <div className="flex-1 h-5 bg-gray-100 rounded overflow-hidden">
-                        <div className={`h-full ${isRiver ? 'bg-[#C8102E]' : 'bg-blue-400'}`} style={{width:`${pctNum}%`}}></div>
-                      </div>
-                      <span className="text-xs font-semibold text-gray-700 w-10 text-right">P{pctNum}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
+          <ComparativoPosicion
+            posicion={posicion}
+            liga={liga}
+            temporada={temporada}
+            inputCls={inputCls}
+            onVerDetalle={(j: any) => { setJugadorSel(j); setTab(1) }}
+          />
         )}
 
-        {/* TAB 4 — Buscador */}
+        {/* TAB 4 — Similitud IA */}
         {tab === 3 && (
-          <div>
-            <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
-              <div className="text-sm font-medium text-gray-700 mb-3">Buscá un jugador por nombre</div>
-              <div className="flex gap-3">
-                <input type="text" placeholder="Ej: Galván, Driussi, Moreno..."
-                  value={busquedaSim} onChange={e => setBusquedaSim(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && buscarSimilitud()}
-                  className={inputCls + ' flex-1'} />
-                <button onClick={buscarSimilitud} disabled={buscandoSim}
-                  className="bg-[#C8102E] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#A00D24] disabled:opacity-50">
-                  {buscandoSim ? 'Buscando...' : 'Buscar'}
-                </button>
-              </div>
-              <div className="text-xs text-gray-400 mt-2">Buscando en posición: {posicion} · todas las ligas</div>
-            </div>
-            {resultadosSim.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  {resultadosSim.length} resultados
-                </div>
-                {resultadosSim.map((j, idx) => {
-                  const col = getCalColor(j.indice_total, maxScore || 10)
-                  const isRiver = j.equipo?.toLowerCase().includes('river')
-                  return (
-                    <div key={j.id} onClick={() => { setJugadorSel(j); setTab(1) }}
-                      className={`flex items-center px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 gap-3 ${isRiver ? 'bg-red-50/40' : ''}`}>
-                      <span className="text-xs text-gray-400 w-6">{idx + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                          <span className="truncate">{j.nombre_completo}</span>
-                          {isRiver && <span className="text-xs bg-[#C8102E] text-white px-1.5 py-0.5 rounded flex-shrink-0">River</span>}
-                        </div>
-                        <div className="text-xs text-gray-500">{j.equipo} · {j.liga} · {j.temporada}</div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${col.bg} ${col.text}`}>{j.indice_total?.toFixed(2)}</span>
-                        <span className="text-xs text-gray-400">{j.posicion}</span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+          <BuscadorSimilitud
+            posicion={posicion}
+            liga={liga}
+            temporada={temporada}
+            inputCls={inputCls}
+            onVerDetalle={(j: any) => { setJugadorSel(j); setTab(1) }}
+          />
         )}
+
       </div>
     </div>
   )
 }
+
+// ============================================================
+// COMPONENTE: Comparativo por posición
+// ============================================================
+function ComparativoPosicion({ posicion, liga, temporada, inputCls, onVerDetalle }: {
+  posicion: string
+  liga: string
+  temporada: string
+  inputCls: string
+  onVerDetalle: (j: any) => void
+}) {
+  const [metrica,         setMetrica]         = useState('')
+  const [topN,            setTopN]            = useState(15)
+  const [minutosMin,      setMinutosMin]      = useState(900)
+  const [datos,           setDatos]           = useState<any[]>([])
+  const [promedio,        setPromedio]        = useState<number>(0)
+  const [metricas,        setMetricas]        = useState<{ key: string; label: string }[]>([])
+  const [loading,         setLoading]         = useState(false)
+  const [error,           setError]           = useState('')
+  const [mostrarPromedio, setMostrarPromedio] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/comparativo?posicion=${encodeURIComponent(posicion)}`)
+      .then(r => r.json())
+      .then(d => {
+        setMetricas(d.metricasDisponibles || [])
+        setMetrica(d.metricasDisponibles?.[0]?.key || '')
+      })
+  }, [posicion])
+
+  const buscar = useCallback(async () => {
+    if (!metrica) return
+    setLoading(true)
+    setError('')
+    try {
+      const params = new URLSearchParams({
+        posicion,
+        metrica,
+        topN: String(topN),
+        minutosMin: String(minutosMin),
+        ...(liga      ? { liga }      : {}),
+        ...(temporada ? { temporada } : {}),
+      })
+      const res  = await fetch(`/api/comparativo?${params}`)
+      const data = await res.json()
+      if (data.error) { setError(data.error); return }
+      setDatos(data.jugadores || [])
+      setPromedio(data.promedio || 0)
+    } catch {
+      setError('Error al cargar datos')
+    } finally {
+      setLoading(false)
+    }
+  }, [posicion, liga, temporada, metrica, topN, minutosMin])
+
+  useEffect(() => { buscar() }, [buscar])
+
+  const metricaLabel = metricas.find(m => m.key === metrica)?.label || metrica
+  const maxValor     = datos.length > 0 ? Math.max(...datos.map(j => parseFloat(j[metrica]) || 0)) : 1
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500 uppercase tracking-wider font-medium">Métrica</label>
+          <select value={metrica} onChange={e => setMetrica(e.target.value)} className={inputCls}>
+            {metricas.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500 uppercase tracking-wider font-medium">Cantidad</label>
+          <select value={topN} onChange={e => setTopN(parseInt(e.target.value))} className={inputCls}>
+            <option value={10}>Top 10</option>
+            <option value={15}>Top 15</option>
+            <option value={20}>Top 20</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500 uppercase tracking-wider font-medium">Mínimo minutos</label>
+          <select value={minutosMin} onChange={e => setMinutosMin(parseInt(e.target.value))} className={inputCls}>
+            {MINUTOS_OPCIONES.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer pb-1">
+          <input type="checkbox" checked={mostrarPromedio} onChange={e => setMostrarPromedio(e.target.checked)} className="accent-red-600" />
+          Mostrar promedio
+        </label>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-gray-800 font-semibold text-base">
+            Top {topN} — {posicion} — {metricaLabel}
+          </h3>
+          {(liga || temporada) && (
+            <p className="text-gray-400 text-xs mt-0.5">{[liga, temporada].filter(Boolean).join(' · ')}{minutosMin > 0 ? ` · Mín. ${minutosMin} min` : ''}</p>
+          )}
+        </div>
+        {mostrarPromedio && promedio > 0 && (
+          <div className="text-sm text-gray-500">
+            Promedio: <span className="font-semibold text-amber-600">{promedio}</span>
+          </div>
+        )}
+      </div>
+
+      {loading && (
+        <div className="flex items-center gap-3 py-8 text-gray-400 text-sm">
+          <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+          Cargando datos...
+        </div>
+      )}
+      {error && <p className="text-red-500 text-sm">{error}</p>}
+
+      {!loading && datos.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="space-y-2">
+            {datos.map((j, idx) => {
+              const valor   = parseFloat(j[metrica]) || 0
+              const pct     = maxValor > 0 ? (valor / maxValor) * 100 : 0
+              const promPct = maxValor > 0 ? (promedio / maxValor) * 100 : 0
+              const esRiver = j.equipo?.toLowerCase().includes('river')
+              return (
+                <div key={`${j.nombre_completo}-${idx}`} onClick={() => onVerDetalle(j)}
+                  style={{display:'flex', alignItems:'center', gap:8, padding:'4px 0', cursor:'pointer'}}>
+                  <span style={{fontSize:11, color:'#9ca3af', width:16, textAlign:'right', flexShrink:0}}>{idx+1}</span>
+                  <div style={{width:24, height:24, borderRadius:'50%', overflow:'hidden', background:'#f3f4f6', flexShrink:0}}>
+                    {j.foto_url
+                      ? <img src={j.foto_url} alt="" style={{width:'100%', height:'100%', objectFit:'cover'}} />
+                      : <div style={{width:'100%', height:'100%', background:'#e5e7eb'}} />}
+                  </div>
+                  <span style={{fontSize:12, fontWeight:500, width:150, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flexShrink:0, color: esRiver ? '#C8102E' : '#1f2937'}}>
+                    {j.nombre_completo}{esRiver ? ' ★' : ''}
+                  </span>
+                  <span style={{fontSize:11, color:'#9ca3af', width:110, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flexShrink:0}}>
+                    {j.equipo}
+                  </span>
+                  <div style={{flex:1, position:'relative', height:18, background:'#f3f4f6', borderRadius:4, overflow:'hidden'}}>
+                    <div style={{height:'100%', width:`${pct}%`, backgroundColor: esRiver ? '#C8102E' : idx < 3 ? '#374151' : '#9ca3af', borderRadius:4}} />
+                    {mostrarPromedio && promedio > 0 && (
+                      <div style={{position:'absolute', top:0, bottom:0, left:`${promPct}%`, borderLeft:'2px dashed #f59e0b'}} />
+                    )}
+                  </div>
+                  <span style={{fontSize:12, fontWeight:700, color:'#374151', width:36, textAlign:'right', flexShrink:0}}>
+                    {valor.toFixed(2)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {!loading && datos.length === 0 && !error && (
+        <p className="text-gray-400 text-sm py-6">Sin datos para los filtros seleccionados.</p>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+// COMPONENTE: Buscador de similitud con IA
+// ============================================================
+function BuscadorSimilitud({ posicion, liga, temporada, inputCls, onVerDetalle }: {
+  posicion: string
+  liga: string
+  temporada: string
+  inputCls: string
+  onVerDetalle: (j: any) => void
+}) {
+  const [modo,        setModo]        = useState<'descripcion' | 'jugador'>('descripcion')
+  const [descripcion, setDescripcion] = useState('')
+  const [nombreRef,   setNombreRef]   = useState('')
+  const [edadMax,     setEdadMax]     = useState('')
+  const [minutosMin,  setMinutosMin]  = useState(900)
+  const [resultados,  setResultados]  = useState<any[]>([])
+  const [explicacion, setExplicacion] = useState('')
+  const [loading,     setLoading]     = useState(false)
+  const [error,       setError]       = useState('')
+
+  const buscar = async () => {
+    const texto = modo === 'descripcion' ? descripcion.trim() : nombreRef.trim()
+    if (!texto) return
+    setLoading(true)
+    setError('')
+    setResultados([])
+    setExplicacion('')
+    try {
+      const body: any = { posicion, liga, temporada, minutosMin }
+      if (modo === 'descripcion') body.descripcion       = texto
+      else                        body.jugadorReferencia = texto
+      if (edadMax) body.edadMax = parseInt(edadMax)
+
+      const res  = await fetch('/api/similitud', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (data.error) { setError(data.error); return }
+      setResultados(data.jugadores  || [])
+      setExplicacion(data.explicacion || '')
+    } catch {
+      setError('Error al conectar con el servidor')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const colorSim = (p: number) =>
+    p >= 85 ? '#16a34a' : p >= 70 ? '#d97706' : p >= 55 ? '#ea580c' : '#6b7280'
+
+  return (
+    <div className="space-y-5">
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+        {(['descripcion', 'jugador'] as const).map(m => (
+          <button key={m} onClick={() => { setModo(m); setResultados([]); setExplicacion('') }}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              modo === m ? 'bg-[#C8102E] text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
+            }`}>
+            {m === 'descripcion' ? '🔍 Por descripción' : '👤 Por jugador'}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+        {modo === 'descripcion' ? (
+          <>
+            <p className="text-sm font-medium text-gray-700">
+              Describí el perfil que buscás · posición: <span className="text-red-600 font-semibold">{posicion}</span>
+            </p>
+            <textarea
+              value={descripcion}
+              onChange={e => setDescripcion(e.target.value)}
+              placeholder={`Ej: Quiero un ${posicion} con alto porcentaje de recuperaciones y buena salida con el balón...`}
+              rows={3}
+              style={{ color: '#111827', backgroundColor: '#ffffff' }}
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm placeholder-gray-400 focus:outline-none focus:border-red-500 resize-none"
+            />
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-medium text-gray-700">
+              Nombre del jugador de referencia · posición: <span className="text-red-600 font-semibold">{posicion}</span>
+            </p>
+            <input
+              type="text"
+              value={nombreRef}
+              onChange={e => setNombreRef(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && buscar()}
+              placeholder="Ej: Tomás Galván"
+              style={{ color: '#111827', backgroundColor: '#ffffff' }}
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm placeholder-gray-400 focus:outline-none focus:border-red-500"
+            />
+          </>
+        )}
+
+        {/* Filtros */}
+        <div className="flex flex-wrap gap-4 pt-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-gray-600 flex-shrink-0">Mínimo minutos:</p>
+            <select value={minutosMin} onChange={e => setMinutosMin(parseInt(e.target.value))} className={inputCls}>
+              {MINUTOS_OPCIONES.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-gray-600 flex-shrink-0">Edad máxima:</p>
+            <input
+              type="number"
+              value={edadMax}
+              onChange={e => setEdadMax(e.target.value)}
+              placeholder="Sin límite"
+              min={16} max={45}
+              style={{ color: '#111827', backgroundColor: '#ffffff' }}
+              className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm placeholder-gray-400 focus:outline-none focus:border-red-500"
+            />
+            {edadMax && (
+              <button onClick={() => setEdadMax('')} className="text-xs text-gray-400 hover:text-gray-600">
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        <button onClick={buscar} disabled={loading}
+          className="flex items-center gap-2 px-6 py-2.5 bg-[#C8102E] hover:bg-[#A00D24] disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+          {loading ? (
+            <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Analizando con IA...</>
+          ) : (
+            <>✨ Buscar jugadores similares</>
+          )}
+        </button>
+      </div>
+
+      {error && <p className="text-red-500 text-sm">{error}</p>}
+
+      {explicacion && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
+          <span className="font-semibold text-blue-600">IA: </span>{explicacion}
+        </div>
+      )}
+
+      {resultados.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            {resultados.length} jugadores encontrados
+            {minutosMin > 0 ? ` · Mín. ${minutosMin} min` : ''}
+            {edadMax ? ` · Edad ≤ ${edadMax} años` : ''}
+          </div>
+          {resultados.map((j, idx) => {
+            const sim     = j.similitud ?? 0
+            const col     = colorSim(sim)
+            const esRiver = j.equipo?.toLowerCase().includes('river')
+            return (
+              <div key={`${j.nombre_completo}-${idx}`} onClick={() => onVerDetalle(j)}
+                className={`flex items-center px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 gap-3 transition-colors ${esRiver ? 'bg-red-50' : ''}`}>
+                <span className="text-xs text-gray-400 w-5 text-center flex-shrink-0">{idx + 1}</span>
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex-shrink-0">
+                  {j.foto_url
+                    ? <img src={j.foto_url} alt="" className="w-full h-full object-cover" />
+                    : <div className="w-full h-full bg-gray-200" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                    <span className="truncate">{j.nombre_completo}</span>
+                    {esRiver && <span className="text-xs bg-[#C8102E] text-white px-1.5 py-0.5 rounded flex-shrink-0">River</span>}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {j.equipo}{j.edad ? ` · ${j.edad} años` : ''}{j.minutos ? ` · ${Math.round(j.minutos)} min` : ''}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${sim}%`, backgroundColor: col }} />
+                  </div>
+                  <span className="text-sm font-bold w-10 text-right" style={{ color: col }}>{sim}%</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
