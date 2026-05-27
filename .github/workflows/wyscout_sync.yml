@@ -1,0 +1,49 @@
+name: Wyscout Sync Semanal
+
+on:
+  # Automático: todos los lunes a las 6am Argentina (UTC-3 = 9am UTC)
+  schedule:
+    - cron: "0 9 * * 1"
+
+  # Manual: desde GitHub o desde la plataforma con un botón
+  workflow_dispatch:
+    inputs:
+      ligas:
+        description: "Ligas a sincronizar (dejar vacío = todas)"
+        required: false
+        default: ""
+
+jobs:
+  sync:
+    name: Sincronizar datos Wyscout → Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 120   # máx 2 horas (ligas grandes pueden tardar)
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: |
+          pip install --upgrade pip
+          pip install requests pandas supabase scipy openpyxl
+
+      - name: Ejecutar sync
+        env:
+          WYS_API_KEY:    ${{ secrets.WYS_API_KEY }}
+          WYS_API_SECRET: ${{ secrets.WYS_API_SECRET }}
+          SUPABASE_URL:   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:   ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python scripts/wyscout_sync.py
+
+      - name: Notificar resultado
+        if: always()
+        run: |
+          echo "Sync finalizado con estado: ${{ job.status }}"
