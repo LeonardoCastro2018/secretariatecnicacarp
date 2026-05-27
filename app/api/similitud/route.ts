@@ -316,7 +316,7 @@ Jugadores: ${JSON.stringify(datosResumidos)}`
       })
       const aiData = await aiResp.json()
       explicacion = aiData.content?.[0]?.text || ''
-    } catch {}
+    } catch (e) { console.error('Error IA similitud:', e) }
 
     return NextResponse.json({ jugadores: rankeados, explicacion })
 
