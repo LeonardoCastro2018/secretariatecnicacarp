@@ -306,8 +306,8 @@ Jugadores: ${JSON.stringify(datosResumidos)}`
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 400,
-          max_tokens: 200,
           messages: [{
             role: 'user',
             content: `Eres un analista de futbol. El jugador de referencia es ${jugadorReferencia} (${posicion}). Las caracteristicas mas valoradas para esta posicion son: ${Object.entries(pesos).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>k).join(", ")}. En 2 oraciones explica cuales son los puntos fuertes de ${jugadorReferencia} en esas caracteristicas y por que los jugadores encontrados se le asemejan. Sin markdown ni hashtags.`
