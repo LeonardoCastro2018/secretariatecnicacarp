@@ -1,17 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
-// Métricas comunes a todas las posiciones de campo
+
+
+
+
+// MÃ©tricas comunes a todas las posiciones de campo
 const METRICAS_CAMPO: { key: string; label: string }[] = [
   { key: 'defensiveduels',                   label: 'Duelos defensivos c/90' },
   { key: 'defensiveduels_effectiveness',     label: '% Duelos defensivos' },
-  { key: 'aerialduels',                      label: 'Duelos aéreos c/90' },
-  { key: 'fieldaerialduels_effectiveness',   label: '% Duelos aéreos' },
+  { key: 'aerialduels',                      label: 'Duelos aÃ©reos c/90' },
+  { key: 'fieldaerialduels_effectiveness',   label: '% Duelos aÃ©reos' },
   { key: 'offensiveduels',                   label: 'Duelos ofensivos c/90' },
   { key: 'offensiveduels_effectiveness',     label: '% Duelos ofensivos' },
   { key: 'dribbles',                         label: '1vs1 Regates c/90' },
@@ -23,13 +23,13 @@ const METRICAS_CAMPO: { key: string; label: string }[] = [
   { key: 'keypasses',                        label: 'Pases clave c/90' },
   { key: 'progressivepasses',               label: 'Pases progresivos c/90' },
   { key: 'progressivepasses_effectiveness', label: '% Pases progresivos' },
-  { key: 'passestofinalthird',              label: 'Pases últ. tercio c/90' },
-  { key: 'passestofinalthird_effectiveness',label: '% Pases últ. tercio' },
+  { key: 'passestofinalthird',              label: 'Pases Ãºlt. tercio c/90' },
+  { key: 'passestofinalthird_effectiveness',label: '% Pases Ãºlt. tercio' },
   { key: 'longpasses',                      label: 'Pases largos c/90' },
   { key: 'longpasses_effectiveness',        label: '% Pases largos' },
   { key: 'crosses',                         label: 'Centros c/90' },
   { key: 'successfulcrosses',              label: 'Centros exitosos c/90' },
-  { key: 'touchinbox',                      label: 'Toques en área c/90' },
+  { key: 'touchinbox',                      label: 'Toques en Ã¡rea c/90' },
   { key: 'shots',                           label: 'Remates c/90' },
   { key: 'shots_effectiveness',             label: '% Efectividad remates' },
   { key: 'goals',                           label: 'Goles c/90' },
@@ -41,8 +41,8 @@ const METRICAS_CAMPO: { key: string; label: string }[] = [
 const METRICAS_ARQ: { key: string; label: string }[] = [
   { key: 'gkshotsagainst',               label: 'Remates en contra c/90' },
   { key: 'gkshotsagainst_effectiveness', label: '% Paradas' },
-  { key: 'gkaerialduels',               label: 'Duelos aéreos c/90' },
-  { key: 'gkaerialduels_effectiveness', label: '% Duelos aéreos' },
+  { key: 'gkaerialduels',               label: 'Duelos aÃ©reos c/90' },
+  { key: 'gkaerialduels_effectiveness', label: '% Duelos aÃ©reos' },
   { key: 'gkexits',                     label: 'Salidas c/90' },
   { key: 'gkcleansheets',              label: 'Arco en cero %' },
   { key: 'xgshot',                      label: 'xG atajadas c/90' },
@@ -69,7 +69,10 @@ export async function GET(req: NextRequest) {
   const temporada = searchParams.get('temporada')  || ''
   const metrica   = searchParams.get('metrica')    || ''
   const topN      = parseInt(searchParams.get('topN') || '15')
-
+  const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
   if (!metrica) {
     return NextResponse.json({
       metricasDisponibles: METRICAS_POR_POSICION[posicion] || [],

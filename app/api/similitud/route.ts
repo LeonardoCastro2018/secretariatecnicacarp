@@ -1,9 +1,9 @@
 ﻿import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
-)
+
+
+
+
 
 
 const NACIONALIDADES_SUD = [
@@ -173,7 +173,10 @@ function calcularSimilitud(ref: any, candidato: any, pesos: Record<string, numbe
 export async function POST(req: NextRequest) {
   try {
     const { descripcion, jugadorReferencia, posicion, ligas, temporada, edadMax, minutosMin } = await req.json()
-
+    const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
     const pesos = PESOS[posicion] || {}
     const metricas = Object.keys(pesos)
     const selectCols = [
