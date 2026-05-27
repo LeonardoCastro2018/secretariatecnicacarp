@@ -196,11 +196,11 @@ def query_api(endpoint: str, params: dict = None) -> dict | None:
         log.warning(f"API error {endpoint}: {e}")
         return None
 
-def get_players_by_season(season_id: int) -> pd.DataFrame:
+def get_players_by_season(season_id: int, comp_id: str) -> pd.DataFrame:
     frames = []
     page = 1
     while True:
-        data = query_api(f"seasons/{season_id}/players", {"limit": 100, "page": page})
+        data = query_api(f"seasons/{season_id}/players", {"limit": 100, "page": page, "compId": comp_id})
         if not data or "players" not in data:
             break
         df = pd.DataFrame(data["players"])
@@ -528,7 +528,7 @@ def procesar_liga(comp: dict):
 
     # 1. Jugadores
     log.info("1/6 Descargando jugadores...")
-    players_df = get_players_by_season(season_id)
+    players_df = get_players_by_season(season_id, comp_id)
     if players_df.empty:
         log.warning(f"Sin jugadores para {liga}. Se omite.")
         return
