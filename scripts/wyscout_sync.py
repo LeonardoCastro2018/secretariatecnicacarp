@@ -46,25 +46,50 @@ MIN_MINUTOS = 300
 # Descomentá las que querés actualizar cada semana
 # ─────────────────────────────────────────
 LISTADO_COMPETICIONES = [
+    {"compId": "146",  "seasonId": "191377", "nombre": "ARG_A25"},
     {"compId": "146",  "seasonId": "192277", "nombre": "ARG_A26"},
+    {"compId": "879",  "seasonId": "191431", "nombre": "URU_A25"},
     {"compId": "879",  "seasonId": "192353", "nombre": "URU_A26"},
+    {"compId": "295",  "seasonId": "191399", "nombre": "COL_A25"},
     {"compId": "295",  "seasonId": "192291", "nombre": "COL_A26"},
+    {"compId": "284",  "seasonId": "191321", "nombre": "CHI_A25"},
     {"compId": "284",  "seasonId": "192318", "nombre": "CHI_A26"},
+    {"compId": "255",  "seasonId": "191347", "nombre": "BRA_A25"},
     {"compId": "255",  "seasonId": "192251", "nombre": "BRA_A26"},
+    {"compId": "256",  "seasonId": "190715", "nombre": "BRA_B25"},
     {"compId": "256",  "seasonId": "192290", "nombre": "BRA_B26"},
+    {"compId": "685",  "seasonId": "191351", "nombre": "PAR_A25"},
     {"compId": "685",  "seasonId": "192287", "nombre": "PAR_A26"},
-    {"compId": "1601", "seasonId": "192303", "nombre": "ARG_RES_26"},
-    {"compId": "143",  "seasonId": "192343", "nombre": "ARG_NB_26"},
+    {"compId": "1601", "seasonId": "190629", "nombre": "ARG_RES25"},
+    {"compId": "1601", "seasonId": "192303", "nombre": "ARG_RES26"},
+    {"compId": "143",  "seasonId": "190703", "nombre": "ARG_NB25"},
+    {"compId": "143",  "seasonId": "192343", "nombre": "ARG_NB26"},
+    {"compId": "142",  "seasonId": "190592", "nombre": "ARG_B25"},
+    {"compId": "339",  "seasonId": "191362", "nombre": "ECU_A25"},
     {"compId": "339",  "seasonId": "192364", "nombre": "ECU_A26"},
+    {"compId": "886",  "seasonId": "191359", "nombre": "VEN_A25"},
     {"compId": "886",  "seasonId": "192290", "nombre": "VEN_A26"},
+    {"compId": "617",  "seasonId": "191600", "nombre": "MEX_A26"},
+    {"compId": "869",  "seasonId": "192361", "nombre": "USA_A26"},
+    {"compId": "82",   "seasonId": "190560", "nombre": "Libertadores_25"},
     {"compId": "82",   "seasonId": "192323", "nombre": "Libertadores_26"},
+    {"compId": "84",   "seasonId": "190578", "nombre": "Sudamericana_25"},
     {"compId": "84",   "seasonId": "192404", "nombre": "Sudamericana_26"},
-    # Europeas
-    # {"compId": "524",  "seasonId": "191623", "nombre": "ITA_A26"},
-    # {"compId": "364",  "seasonId": "191622", "nombre": "ING_A26"},
-    # {"compId": "795",  "seasonId": "191659", "nombre": "ESP_A26"},
-    # {"compId": "412",  "seasonId": "191683", "nombre": "FRA_A26"},
-    # {"compId": "426",  "seasonId": "191661", "nombre": "ALE_A26"},
+    {"compId": "707",  "seasonId": "191794", "nombre": "Port_A26"},
+    {"compId": "524",  "seasonId": "191623", "nombre": "ITA_A26"},
+    {"compId": "364",  "seasonId": "191622", "nombre": "ING_A26"},
+    {"compId": "358",  "seasonId": "191637", "nombre": "ING_B26"},
+    {"compId": "795",  "seasonId": "191659", "nombre": "ESP_A26"},
+    {"compId": "797",  "seasonId": "191660", "nombre": "ESP_B26"},
+    {"compId": "412",  "seasonId": "191683", "nombre": "FRA_A26"},
+    {"compId": "426",  "seasonId": "191661", "nombre": "ALE_A26"},
+    {"compId": "198",  "seasonId": "191617", "nombre": "BELG_A26"},
+    {"compId": "635",  "seasonId": "191676", "nombre": "HOL_A26"},
+    {"compId": "852",  "seasonId": "191705", "nombre": "TURQ_A26"},
+    {"compId": "448",  "seasonId": "191860", "nombre": "GRE_A26"},
+    {"compId": "88",   "seasonId": "191308", "nombre": "Sud_U20_25"},
+    {"compId": "86",   "seasonId": "192502", "nombre": "Sud_U17_26"},
+    {"compId": "90",   "seasonId": "190285", "nombre": "Eliminatorias"},
 ]
 
 MAPEO_LIGAS = {
@@ -200,7 +225,7 @@ def get_players_by_season(season_id: int, comp_id: str) -> pd.DataFrame:
     frames = []
     page = 1
     while True:
-        data = query_api(f"seasons/{season_id}/players", {"limit": 100, "page": page, "compId": comp_id})
+        data = query_api(f"seasons/{season_id}/players", {"limit": 100, "page": page})
         if not data or "players" not in data:
             break
         df = pd.DataFrame(data["players"])
