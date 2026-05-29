@@ -33,10 +33,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 HOST       = "https://apirest.wyscout.com/v3/"
+from dotenv import load_dotenv
+load_dotenv(r"C:\Users\Usuario\secretaria-tecnica-carp\.env.local")
+
 API_KEY    = os.environ["WYS_API_KEY"]
 API_SECRET = os.environ["WYS_API_SECRET"]
 SUPA_URL   = os.environ["SUPABASE_URL"]
-SUPA_KEY   = os.environ["SUPABASE_KEY"]   # service_role key para poder escribir
+SUPA_KEY   = os.environ["SUPABASE_KEY"]
 
 # Mínimo de minutos jugados para incluir al jugador
 MIN_MINUTOS = 300

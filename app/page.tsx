@@ -1,21 +1,23 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 
 export default function Home() {
   const [jugadoresCount, setJugadoresCount] = useState(0)
   const [informesCount, setInformesCount] = useState(0)
   const [cedidosCount, setCedidosCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [userEmail, setUserEmail] = useState('')
+  const router = useRouter()
+  const supabase = createClient()
 
   useEffect(() => {
-    async function fetchStats() {
+    async function fetchData() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) setUserEmail(user.email || '')
+
       const [{ count: j }, { count: i }, { count: c }] = await Promise.all([
         supabase.from('jugadores').select('*', { count: 'exact', head: true }),
         supabase.from('informes_scouting').select('*', { count: 'exact', head: true }),
@@ -26,8 +28,14 @@ export default function Home() {
       setCedidosCount(c || 0)
       setLoading(false)
     }
-    fetchStats()
+    fetchData()
   }, [])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
 
   const navItems = [
     { label: 'Informes individuales', href: '/informes', icon: '📋' },
@@ -57,8 +65,14 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <div className="text-sm text-red-200">
-          River Plate
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-red-200">{userEmail}</span>
+          <button
+            onClick={handleLogout}
+            className="text-xs bg-red-700 hover:bg-red-800 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Cerrar sesión
+          </button>
         </div>
       </div>
 
@@ -66,7 +80,7 @@ export default function Home() {
         {/* Bienvenida */}
         <div className="mb-8">
           <h1 className="text-2xl font-medium text-gray-900">
-            Bienvenido, Leonardo
+            Bienvenido
           </h1>
           <p className="text-gray-500 text-sm mt-1">
             Plataforma de análisis y scouting — Temporada 2025/26
@@ -98,15 +112,16 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Módulos */}
+{/* Módulos */}
         <div className="mb-4">
           <h2 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
             Módulos
           </h2>
           <div className="grid grid-cols-4 gap-3">
             {navItems.map((item) => (
-              <a
-                key={item.href}
+              
+<a
+              key={item.href}
                 href={item.href}
                 className="bg-white border border-gray-200 rounded-xl p-4 hover:border-[#C8102E] hover:shadow-sm transition-all group"
               >
@@ -118,7 +133,6 @@ export default function Home() {
             ))}
           </div>
         </div>
-
         {/* Estado de conexión */}
         <div className="mt-8 flex items-center gap-2 text-xs text-gray-400">
           <div className={`w-2 h-2 rounded-full ${loading ? 'bg-yellow-400' : 'bg-green-500'}`}></div>
